@@ -1,0 +1,35 @@
+# docker/docker-compose.yml
+
+version: '3.8'
+
+services:
+  app:
+    container_name: my-url-shortener
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - '3000:3000'
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/url-shortener-db
+    depends_on:
+      - db
+    volumes:
+      - ..:/app
+    command: npm run start:dev
+
+  db:
+    image: postgres:15
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_DB: url-shortener-db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
