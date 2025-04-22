@@ -9,13 +9,14 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     ports:
-      - '4000:4000'
+      - '3000:3000'
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/url-shortener-db
     depends_on:
       - db
     volumes:
       - ..:/app
+      - /app/node_modules
     command: npm run start:dev
 
   db:
