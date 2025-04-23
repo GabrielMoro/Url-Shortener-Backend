@@ -1,10 +1,11 @@
 import { AuthGuard } from '@/infra/guard/authorization.guard';
-import { Controller, Get, Param, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
 import { UserService } from './services/user/user.service';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { GetUser } from '@/common/decorators/get-user.decorator';
 import { User } from './entities/user.entity';
 import { ListUrlDto } from './dtos/list-urls.dto';
+import { UpdateUrlDto } from './dtos/update-url.dto';
 
 @ApiTags('user')
 @UseGuards(AuthGuard)
@@ -30,6 +31,10 @@ export class UserController {
     summary: 'Obter uma URL encurtada',
     description: 'Retorna uma URL encurtada específica com base no shortCode.',
   })
+  @ApiParam({
+    name: 'shortCode',
+    description: 'Código único da URL encurtada a ser atualizada',
+  })
   @ApiResponse({
     status: 200,
     description: 'URL encontrada e retornada com sucesso.',
@@ -45,5 +50,23 @@ export class UserController {
     @GetUser() user: User,
   ): Promise<ListUrlDto> {
     return this.userService.getUrlByShortCode(user.id, shortCode);
+  }
+
+  @ApiOperation({
+    summary: 'Atualizar o destino de uma URL encurtada',
+    description: 'Atualiza o destino de uma URL encurtada com base no shortCode fornecido.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'URL atualizada com sucesso.',
+    type: ListUrlDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'URL não encontrado.',
+  })
+  @Patch('url')
+  async updateOneUrl(@Body() body: UpdateUrlDto, @GetUser() user: User): Promise<ListUrlDto> {
+    return this.userService.updateOneUrl(user.id, body);
   }
 }
