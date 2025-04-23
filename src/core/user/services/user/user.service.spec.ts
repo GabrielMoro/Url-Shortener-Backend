@@ -4,7 +4,7 @@ import { UserService } from './user.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../../entities/user.entity';
-import { Logger } from '@nestjs/common';
+import { Logger, NotFoundException } from '@nestjs/common';
 
 describe('UserService', () => {
   let service: UserService;
@@ -26,6 +26,7 @@ describe('UserService', () => {
           provide: Logger,
           useValue: {
             log: jest.fn(),
+            error: jest.fn(),
           },
         },
       ],
@@ -91,6 +92,59 @@ describe('UserService', () => {
       const result = await service.listUrls('inexistente');
 
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('getUrlByShortCode', () => {
+    it('Deve retornar a URL correspondente ao shortCode', async () => {
+      const mockUser = {
+        id: 'user-id',
+        urls: [
+          {
+            id: 'url-id',
+            shortCode: 'abc123',
+            targetUrl: 'https://example.com',
+            clicks: 10,
+            createdAt: new Date('2023-01-01T00:00:00.000Z'),
+          },
+        ],
+      } as unknown as User;
+
+      userRepository.findOne.mockResolvedValue(mockUser);
+
+      const result = await service.getUrlByShortCode('user-id', 'abc123');
+
+      expect(userRepository.findOne).toHaveBeenCalledWith({
+        where: { id: 'user-id' },
+        relations: ['urls'],
+      });
+
+      expect(result).toEqual({
+        id: 'url-id',
+        shortCode: 'abc123',
+        shortUrl: 'http://localhost:3000/abc123',
+        targetUrl: 'https://example.com',
+        clicks: 10,
+        createdAt: new Date('2023-01-01T00:00:00.000Z'),
+      });
+    });
+
+    it('Deve lançar NotFoundException se o usuário não for encontrado', async () => {
+      userRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.getUrlByShortCode('inexistente', 'abc123')).rejects.toThrowError(
+        new NotFoundException('URL não encontrada'),
+      );
+    });
+
+    it('Deve lançar NotFoundException se a URL com o shortCode não for encontrada', async () => {
+      const mockUser = { id: 'user-id', urls: [] } as unknown as User;
+
+      userRepository.findOne.mockResolvedValue(mockUser);
+
+      await expect(service.getUrlByShortCode('user-id', 'abc123')).rejects.toThrowError(
+        new NotFoundException('URL não encontrada'),
+      );
     });
   });
 });
