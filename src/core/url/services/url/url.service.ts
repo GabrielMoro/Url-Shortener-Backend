@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Url } from '../../entities/url.entity';
@@ -34,5 +34,25 @@ export class UrlService {
     return {
       shortUrl: `${baseUrl}/${shortCode}`,
     };
+  }
+
+  async redirect(shortCode: string): Promise<string> {
+    this.logger.log('Iniciando lógica de redirecionamento');
+
+    const url = await this.urlRepository.findOne({
+      where: {
+        shortCode,
+        deletedAt: undefined,
+      },
+    });
+
+    if (!url) {
+      throw new NotFoundException('URL não encontrada ou foi removida');
+    }
+
+    url.clicks += 1;
+    await this.urlRepository.save(url);
+
+    return url.targetUrl;
   }
 }
