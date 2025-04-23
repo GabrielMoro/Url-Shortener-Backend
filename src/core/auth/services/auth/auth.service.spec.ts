@@ -1,17 +1,19 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
-import { BadRequestException, Logger } from '@nestjs/common';
+import { BadRequestException, Logger, UnauthorizedException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserCredentialsDTO } from '../../dtos/create-user.dto';
 import { randomUUID } from 'crypto';
 import { User } from '@/core/user/entities/user.entity';
 import * as crypto from 'crypto';
+import { JwtService } from '@nestjs/jwt';
 
 describe('AuthService', () => {
   let service: AuthService;
   let userRepository: jest.Mocked<Repository<User>>;
+  let jwtService: jest.Mocked<JwtService>;
 
   beforeEach(async () => {
     const userRepositoryMock: jest.Mocked<Partial<Repository<User>>> = {
@@ -28,11 +30,18 @@ describe('AuthService', () => {
           provide: getRepositoryToken(User),
           useValue: userRepositoryMock,
         },
+        {
+          provide: JwtService,
+          useValue: {
+            sign: jest.fn().mockReturnValue('fake-jwt-token'),
+          },
+        },
       ],
     }).compile();
 
     service = module.get<AuthService>(AuthService);
     userRepository = module.get(getRepositoryToken(User));
+    jwtService = module.get(JwtService);
   });
 
   describe('register', () => {
@@ -41,7 +50,7 @@ describe('AuthService', () => {
       password: 'password',
     };
 
-    it('should throw if email is already in use', async () => {
+    it('Deve lançar um erro (BadRequestException) caso email já esteja em uso', async () => {
       const user = { id: randomUUID() } as User;
       userRepository.findOne.mockResolvedValue(user);
 
@@ -52,7 +61,7 @@ describe('AuthService', () => {
       });
     });
 
-    it('should hash password, create and save user', async () => {
+    it('Deve cadastrar um novo usuário', async () => {
       const hashedPassword = crypto.createHash('sha256').update(input.password).digest('hex');
 
       const user = {
@@ -78,6 +87,49 @@ describe('AuthService', () => {
         password: hashedPassword,
       });
       expect(result).toEqual(user);
+    });
+  });
+
+  describe('login', () => {
+    const input: UserCredentialsDTO = {
+      email: 'test@example.com',
+      password: 'password',
+    };
+    const hashedPassword = crypto.createHash('sha256').update(input.password).digest('hex');
+    const user = {
+      id: randomUUID(),
+      email: input.email,
+      password: hashedPassword,
+    } as User;
+
+    it('deve lançar um erro (UnauthorizedException) se o usuário não existir', async () => {
+      userRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.login(input)).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('deve lançar um erro (UnauthorizedException) se a senha estiver incorreta', async () => {
+      const wrongUser = { ...user, password: 'senhaerrada' };
+      userRepository.findOne.mockResolvedValue(wrongUser);
+
+      await expect(service.login(input)).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('deve retornar um token se as credenciais estiverem corretas', async () => {
+      userRepository.findOne.mockResolvedValue(user);
+
+      const result = await service.login(input);
+
+      expect(userRepository.findOne).toHaveBeenCalledWith({
+        where: { email: input.email },
+      });
+
+      expect(jwtService.sign).toHaveBeenCalledWith({
+        userId: user.id,
+        email: user.email,
+      });
+
+      expect(result).toEqual({ accessToken: 'fake-jwt-token' });
     });
   });
 });
