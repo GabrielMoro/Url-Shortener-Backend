@@ -22,10 +22,11 @@ export class UserService {
   async listUrls(userId: string): Promise<ListUrlDto[]> {
     this.logger.log('Iniciando listagem de URLs');
 
-    const user = await this.userRepository.findOne({
-      where: { id: userId },
-      relations: ['urls'],
-    });
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.urls', 'url', 'url.deletedAt IS NULL')
+      .where('user.id = :userId', { userId })
+      .getOne();
 
     if (!user?.urls) {
       this.logger.log('Usuário não possui URLs');
@@ -48,10 +49,11 @@ export class UserService {
   async getUrlByShortCode(userId: string, shortCode: string): Promise<ListUrlDto> {
     this.logger.log('Iniciando busca de URL pelo shortCode');
 
-    const user = await this.userRepository.findOne({
-      where: { id: userId },
-      relations: ['urls'],
-    });
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.urls', 'url', 'url.deletedAt IS NULL')
+      .where('user.id = :userId', { userId })
+      .getOne();
 
     if (!user) {
       this.logger.error('Usuário não encontrado');
@@ -59,7 +61,7 @@ export class UserService {
       throw new NotFoundException('URL não encontrada');
     }
 
-    const url = user.urls.find((url) => url.shortCode === shortCode && !url.deletedAt);
+    const url = user.urls.find((url) => url.shortCode === shortCode);
 
     if (!url) {
       this.logger.error('URL não encontrada');
@@ -84,10 +86,11 @@ export class UserService {
 
     const { newUrl, shortCode } = body;
 
-    const user = await this.userRepository.findOne({
-      where: { id: userId },
-      relations: ['urls'],
-    });
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.urls', 'url', 'url.deletedAt IS NULL')
+      .where('user.id = :userId', { userId })
+      .getOne();
 
     if (!user) {
       this.logger.error('Usuário não encontrado');
@@ -95,7 +98,7 @@ export class UserService {
       throw new NotFoundException('Usuário não encontrado');
     }
 
-    const url = user.urls.find((url) => url.shortCode === shortCode && !url.deletedAt);
+    const url = user.urls.find((url) => url.shortCode === shortCode);
 
     if (!url) {
       this.logger.error('URL não encontrada');
@@ -132,10 +135,11 @@ export class UserService {
 
     const { shortCode } = body;
 
-    const user = await this.userRepository.findOne({
-      where: { id: userId },
-      relations: ['urls'],
-    });
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.urls', 'url', 'url.deletedAt IS NULL')
+      .where('user.id = :userId', { userId })
+      .getOne();
 
     if (!user) {
       this.logger.error('Usuário não encontrado');
@@ -143,7 +147,7 @@ export class UserService {
       throw new NotFoundException('Usuário não encontrado');
     }
 
-    const url = user.urls.find((url) => url.shortCode === shortCode && !url.deletedAt);
+    const url = user.urls.find((url) => url.shortCode === shortCode);
 
     if (!url) {
       this.logger.error('URL não encontrada');

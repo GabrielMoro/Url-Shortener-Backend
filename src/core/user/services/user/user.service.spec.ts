@@ -3,7 +3,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserService } from './user.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import { User } from '../../entities/user.entity';
 import { BadRequestException, Logger, NotFoundException } from '@nestjs/common';
 import { UpdateUrlDto } from '../../dtos/update-url.dto';
@@ -34,7 +34,7 @@ describe('UserService', () => {
 
   beforeEach(async () => {
     userRepository = {
-      findOne: jest.fn(),
+      createQueryBuilder: jest.fn(),
     } as unknown as jest.Mocked<Repository<User>>;
     urlRepository = {
       save: jest.fn(),
@@ -72,14 +72,9 @@ describe('UserService', () => {
 
   describe('listUrls', () => {
     it('Deve retornar uma lista de URLs para o usuário', async () => {
-      userRepository.findOne.mockResolvedValue(mockUser);
+      mockQueryBuilder(mockUser);
 
       const result = await service.listUrls('user-id');
-
-      expect(userRepository.findOne).toHaveBeenCalledWith({
-        where: { id: 'user-id' },
-        relations: ['urls'],
-      });
 
       expect(result).toEqual([
         {
@@ -94,7 +89,7 @@ describe('UserService', () => {
     });
 
     it('Deve retornar um array vazio se o usuário não tiver URLs', async () => {
-      userRepository.findOne.mockResolvedValue(mockUserNoUrl);
+      mockQueryBuilder(mockUserNoUrl);
 
       const result = await service.listUrls('user-id');
 
@@ -102,7 +97,7 @@ describe('UserService', () => {
     });
 
     it('deve retornar um array vazio se o usuário não for encontrado', async () => {
-      userRepository.findOne.mockResolvedValue(null);
+      mockQueryBuilder(null);
 
       const result = await service.listUrls('inexistente');
 
@@ -112,14 +107,9 @@ describe('UserService', () => {
 
   describe('getUrlByShortCode', () => {
     it('Deve retornar a URL correspondente ao shortCode', async () => {
-      userRepository.findOne.mockResolvedValue(mockUser);
+      mockQueryBuilder(mockUser);
 
       const result = await service.getUrlByShortCode('user-id', 'abc123');
-
-      expect(userRepository.findOne).toHaveBeenCalledWith({
-        where: { id: 'user-id' },
-        relations: ['urls'],
-      });
 
       expect(result).toEqual({
         id: 'url-id',
@@ -132,17 +122,17 @@ describe('UserService', () => {
     });
 
     it('Deve lançar NotFoundException se o usuário não for encontrado', async () => {
-      userRepository.findOne.mockResolvedValue(null);
+      mockQueryBuilder(null);
 
-      await expect(service.getUrlByShortCode('inexistente', 'abc123')).rejects.toThrowError(
+      await expect(service.getUrlByShortCode('inexistente', 'abc123')).rejects.toThrow(
         new NotFoundException('URL não encontrada'),
       );
     });
 
     it('Deve lançar NotFoundException se a URL com o shortCode não for encontrada', async () => {
-      userRepository.findOne.mockResolvedValue(mockUserNoUrl);
+      mockQueryBuilder(mockUserNoUrl);
 
-      await expect(service.getUrlByShortCode('user-id', 'abc123')).rejects.toThrowError(
+      await expect(service.getUrlByShortCode('user-id', 'abc123')).rejects.toThrow(
         new NotFoundException('URL não encontrada'),
       );
     });
@@ -155,15 +145,10 @@ describe('UserService', () => {
     };
 
     it('Deve atualizar a URL corretamente', async () => {
-      userRepository.findOne.mockResolvedValue(mockUser);
+      mockQueryBuilder(mockUser);
       urlRepository.save.mockResolvedValue({ ...mockUrl, targetUrl: body.newUrl });
 
       const result = await service.updateOneUrl('user-id', body);
-
-      expect(userRepository.findOne).toHaveBeenCalledWith({
-        where: { id: 'user-id' },
-        relations: ['urls'],
-      });
 
       expect(urlRepository.save).toHaveBeenCalledWith({
         ...mockUrl,
@@ -181,26 +166,26 @@ describe('UserService', () => {
     });
 
     it('Deve lançar NotFoundException se o usuário não for encontrado', async () => {
-      userRepository.findOne.mockResolvedValue(null);
+      mockQueryBuilder(null);
 
-      await expect(service.updateOneUrl('inexistente', body)).rejects.toThrowError(
+      await expect(service.updateOneUrl('inexistente', body)).rejects.toThrow(
         new NotFoundException('Usuário não encontrado'),
       );
     });
 
     it('Deve lançar NotFoundException se a URL com o shortCode não for encontrada', async () => {
-      userRepository.findOne.mockResolvedValue(mockUserNoUrl);
+      mockQueryBuilder(mockUserNoUrl);
 
-      await expect(service.updateOneUrl('user-id', body)).rejects.toThrowError(
+      await expect(service.updateOneUrl('user-id', body)).rejects.toThrow(
         new NotFoundException('URL não encontrada'),
       );
     });
 
     it('Deve lançar BadRequestException se a atualização falhar', async () => {
-      userRepository.findOne.mockResolvedValue(mockUser);
+      mockQueryBuilder(mockUser);
       urlRepository.save.mockRejectedValue(new Error('Erro inesperado'));
 
-      await expect(service.updateOneUrl('user-id', body)).rejects.toThrowError(
+      await expect(service.updateOneUrl('user-id', body)).rejects.toThrow(
         new BadRequestException('Erro ao atualizar a URL'),
       );
     });
@@ -214,15 +199,10 @@ describe('UserService', () => {
     };
 
     it('Deve deletar logicamente a URL com sucesso', async () => {
-      userRepository.findOne.mockResolvedValue(mockUser);
+      mockQueryBuilder(mockUser);
       urlRepository.save.mockResolvedValue({ ...mockUrl, deletedAt });
 
       const result = await service.deleteOneUrl('user-id', body);
-
-      expect(userRepository.findOne).toHaveBeenCalledWith({
-        where: { id: 'user-id' },
-        relations: ['urls'],
-      });
 
       expect(urlRepository.save).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -244,7 +224,7 @@ describe('UserService', () => {
     });
 
     it('Deve lançar BadRequestException se ocorrer erro ao salvar', async () => {
-      userRepository.findOne.mockResolvedValue({
+      mockQueryBuilder({
         ...mockUser,
         urls: [
           {
@@ -265,19 +245,29 @@ describe('UserService', () => {
     });
 
     it('Deve lançar NotFoundException se a URL não for encontrada', async () => {
-      userRepository.findOne.mockResolvedValue(mockUserNoUrl);
+      mockQueryBuilder(mockUserNoUrl);
 
-      await expect(service.deleteOneUrl('user-id', body)).rejects.toThrowError(
+      await expect(service.deleteOneUrl('user-id', body)).rejects.toThrow(
         new NotFoundException('URL não encontrada'),
       );
     });
 
     it('Deve lançar NotFoundException se o usuário não for encontrado', async () => {
-      userRepository.findOne.mockResolvedValue(null);
+      mockQueryBuilder(null);
 
-      await expect(service.deleteOneUrl('inexistente', body)).rejects.toThrowError(
+      await expect(service.deleteOneUrl('inexistente', body)).rejects.toThrow(
         new NotFoundException('Usuário não encontrado'),
       );
     });
   });
+
+  function mockQueryBuilder(result: User | null) {
+    const qb: Partial<SelectQueryBuilder<User>> = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue(result),
+    };
+
+    userRepository.createQueryBuilder.mockReturnValue(qb as SelectQueryBuilder<User>);
+  }
 });
