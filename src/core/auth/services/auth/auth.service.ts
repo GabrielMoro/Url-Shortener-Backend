@@ -55,7 +55,7 @@ export class AuthService {
     this.logger.log(`Usuário autenticado: ${user.email}`);
 
     return {
-      accessToken,
+      accessToken: `Bearer ${accessToken}`,
     };
   }
 }

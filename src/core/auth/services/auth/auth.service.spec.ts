@@ -33,7 +33,7 @@ describe('AuthService', () => {
         {
           provide: JwtService,
           useValue: {
-            sign: jest.fn().mockReturnValue('fake-jwt-token'),
+            sign: jest.fn(),
           },
         },
       ],
@@ -117,6 +117,7 @@ describe('AuthService', () => {
 
     it('deve retornar um token se as credenciais estiverem corretas', async () => {
       userRepository.findOne.mockResolvedValue(user);
+      jwtService.sign.mockReturnValue('fake-jwt-token');
 
       const result = await service.login(input);
 
@@ -129,7 +130,7 @@ describe('AuthService', () => {
         email: user.email,
       });
 
-      expect(result).toEqual({ accessToken: 'fake-jwt-token' });
+      expect(result).toEqual({ accessToken: 'Bearer fake-jwt-token' });
     });
   });
 });
