@@ -102,20 +102,20 @@ describe('AuthService', () => {
       password: hashedPassword,
     } as User;
 
-    it('deve lançar um erro (UnauthorizedException) se o usuário não existir', async () => {
+    it('Deve lançar um erro (UnauthorizedException) se o usuário não existir', async () => {
       userRepository.findOne.mockResolvedValue(null);
 
       await expect(service.login(input)).rejects.toThrow(UnauthorizedException);
     });
 
-    it('deve lançar um erro (UnauthorizedException) se a senha estiver incorreta', async () => {
+    it('Deve lançar um erro (UnauthorizedException) se a senha estiver incorreta', async () => {
       const wrongUser = { ...user, password: 'senhaerrada' };
       userRepository.findOne.mockResolvedValue(wrongUser);
 
       await expect(service.login(input)).rejects.toThrow(UnauthorizedException);
     });
 
-    it('deve retornar um token se as credenciais estiverem corretas', async () => {
+    it('Deve retornar um token se as credenciais estiverem corretas', async () => {
       userRepository.findOne.mockResolvedValue(user);
       jwtService.sign.mockReturnValue('fake-jwt-token');
 
@@ -125,10 +125,13 @@ describe('AuthService', () => {
         where: { email: input.email },
       });
 
-      expect(jwtService.sign).toHaveBeenCalledWith({
-        userId: user.id,
-        email: user.email,
-      });
+      expect(jwtService.sign).toHaveBeenCalledWith(
+        {
+          id: user.id,
+          email: user.email,
+        },
+        { secret: 'dev-secret' },
+      );
 
       expect(result).toEqual({ accessToken: 'Bearer fake-jwt-token' });
     });
