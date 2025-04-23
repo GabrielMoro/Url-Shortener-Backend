@@ -23,7 +23,7 @@ export class Url {
   clicks: number;
 
   @ManyToOne(() => User, (user) => user.urls, { nullable: true, onDelete: 'SET NULL' })
-  user: User;
+  user?: User;
 
   @CreateDateColumn()
   createdAt: Date;
@@ -32,5 +32,5 @@ export class Url {
   updatedAt: Date;
 
   @Column({ nullable: true })
-  deletedAt: Date;
+  deletedAt?: Date;
 }
