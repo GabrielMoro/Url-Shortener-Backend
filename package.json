@@ -1,6 +1,6 @@
 {
   "name": "url-shortener",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "",
   "author": "",
   "private": true,
@@ -21,6 +21,7 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
+    "docker": "docker compose -f docker/docker-compose.yaml up --build",
     "docker:up": "docker compose -f docker/docker-compose.yaml up -d",
     "docker:down": "docker compose -f docker/docker-compose.yaml down",
     "docker:logs": "docker compose -f docker/docker-compose.yaml logs -f app",
@@ -33,9 +34,11 @@
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
+    "@nestjs/jwt": "^11.0.0",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/swagger": "^11.1.4",
     "@nestjs/typeorm": "^11.0.0",
+    "class-validator": "^0.14.1",
     "dotenv": "^16.5.0",
     "pg": "^8.14.1",
     "reflect-metadata": "^0.2.2",
@@ -93,6 +96,9 @@
       "**/*.(t|j)s"
     ],
     "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "^@/(.*)$": "<rootDir>/$1"
+    }
   }
 }
