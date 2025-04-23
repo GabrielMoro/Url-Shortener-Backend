@@ -4,7 +4,7 @@ import { AuthService } from './auth.service';
 import { BadRequestException, Logger } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { CreateUserDto } from '../../dtos/create-user.dto';
+import { UserCredentialsDTO } from '../../dtos/create-user.dto';
 import { randomUUID } from 'crypto';
 import { User } from '@/core/user/entities/user.entity';
 import * as crypto from 'crypto';
@@ -36,7 +36,7 @@ describe('AuthService', () => {
   });
 
   describe('register', () => {
-    const input: CreateUserDto = {
+    const input: UserCredentialsDTO = {
       email: 'test@example.com',
       password: 'password',
     };

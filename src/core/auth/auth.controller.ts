@@ -1,5 +1,5 @@
 import { Body, Controller, Post } from '@nestjs/common';
-import { CreateUserDto } from './dtos/create-user.dto';
+import { UserCredentialsDTO } from './dtos/create-user.dto';
 import { AuthService } from './services/auth/auth.service';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -12,7 +12,12 @@ export class AuthController {
   @ApiResponse({ status: 201, description: 'Usuário criado com sucesso' })
   @ApiResponse({ status: 400, description: 'Email já cadastrado' })
   @Post('register')
-  public register(@Body() input: CreateUserDto) {
+  public register(@Body() input: UserCredentialsDTO) {
     return this.authService.register(input);
+  }
+
+  @Post('login')
+  public login(@Body() input: UserCredentialsDTO) {
+    return this.authService.login(input);
   }
 }
