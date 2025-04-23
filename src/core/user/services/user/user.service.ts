@@ -5,6 +5,7 @@ import { User } from '../../entities/user.entity';
 import { ListUrlDto } from '../../dtos/list-urls.dto';
 import { Url } from '@/core/url/entities/url.entity';
 import { UpdateUrlDto } from '../../dtos/update-url.dto';
+import { DeleteUrlDto } from '../../dtos/delete-url.dto';
 
 @Injectable()
 export class UserService {
@@ -58,7 +59,7 @@ export class UserService {
       throw new NotFoundException('URL não encontrada');
     }
 
-    const url = user.urls.find((url) => url.shortCode === shortCode);
+    const url = user.urls.find((url) => url.shortCode === shortCode && !url.deletedAt);
 
     if (!url) {
       this.logger.error('URL não encontrada');
@@ -94,7 +95,7 @@ export class UserService {
       throw new NotFoundException('Usuário não encontrado');
     }
 
-    const url = user.urls.find((url) => url.shortCode === shortCode);
+    const url = user.urls.find((url) => url.shortCode === shortCode && !url.deletedAt);
 
     if (!url) {
       this.logger.error('URL não encontrada');
@@ -123,6 +124,55 @@ export class UserService {
       targetUrl: url.targetUrl,
       clicks: url.clicks,
       createdAt: url.createdAt,
+    };
+  }
+
+  async deleteOneUrl(userId: string, body: DeleteUrlDto): Promise<ListUrlDto> {
+    this.logger.log('Iniciando exclusão de URL');
+
+    const { shortCode } = body;
+
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['urls'],
+    });
+
+    if (!user) {
+      this.logger.error('Usuário não encontrado');
+
+      throw new NotFoundException('Usuário não encontrado');
+    }
+
+    const url = user.urls.find((url) => url.shortCode === shortCode && !url.deletedAt);
+
+    if (!url) {
+      this.logger.error('URL não encontrada');
+
+      throw new NotFoundException('URL não encontrada');
+    }
+
+    url.deletedAt = new Date();
+
+    try {
+      this.logger.log(`Marcando URL como deletada: ${shortCode}`);
+
+      await this.urlRepository.save(url);
+    } catch (error) {
+      this.logger.error('Erro ao realizar exclusão lógica da URL', error);
+
+      throw new BadRequestException('Erro ao deletar a URL');
+    }
+
+    const baseUrl = process.env.BASE_URL || this.DEFAULT_BASE_URL;
+
+    return {
+      id: url.id,
+      shortCode: url.shortCode,
+      shortUrl: `${baseUrl}/${url.shortCode}`,
+      targetUrl: url.targetUrl,
+      clicks: url.clicks,
+      createdAt: url.createdAt,
+      deletedAt: url.deletedAt,
     };
   }
 }

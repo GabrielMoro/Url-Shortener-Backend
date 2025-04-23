@@ -45,4 +45,12 @@ export class ListUrlDto {
   @IsDate()
   @Type(() => Date)
   createdAt: Date;
+
+  @ApiProperty({
+    example: '2025-04-22T14:30:00.000Z',
+    description: 'Data de exclusão da URL',
+  })
+  @IsDate()
+  @Type(() => Date)
+  deletedAt?: Date;
 }

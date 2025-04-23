@@ -1,11 +1,12 @@
 import { AuthGuard } from '@/infra/guard/authorization.guard';
-import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, UseGuards } from '@nestjs/common';
 import { UserService } from './services/user/user.service';
 import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { GetUser } from '@/common/decorators/get-user.decorator';
 import { User } from './entities/user.entity';
 import { ListUrlDto } from './dtos/list-urls.dto';
 import { UpdateUrlDto } from './dtos/update-url.dto';
+import { DeleteUrlDto } from './dtos/delete-url.dto';
 
 @ApiTags('user')
 @UseGuards(AuthGuard)
@@ -54,7 +55,6 @@ export class UserController {
 
   @ApiOperation({
     summary: 'Atualizar o destino de uma URL encurtada',
-    description: 'Atualiza o destino de uma URL encurtada com base no shortCode fornecido.',
   })
   @ApiResponse({
     status: 200,
@@ -68,5 +68,14 @@ export class UserController {
   @Patch('url')
   async updateOneUrl(@Body() body: UpdateUrlDto, @GetUser() user: User): Promise<ListUrlDto> {
     return this.userService.updateOneUrl(user.id, body);
+  }
+
+  @ApiOperation({ summary: 'Deleta uma URL do usuário pelo shortCode' })
+  @ApiResponse({ status: 200, description: 'URL deletada com sucesso', type: ListUrlDto })
+  @ApiResponse({ status: 404, description: 'Usuário ou URL não encontrados' })
+  @ApiResponse({ status: 400, description: 'Erro ao deletar a URL' })
+  @Delete('url')
+  async deleteOneUrl(@Body() body: DeleteUrlDto, @GetUser() user: User): Promise<ListUrlDto> {
+    return this.userService.deleteOneUrl(user.id, body);
   }
 }
