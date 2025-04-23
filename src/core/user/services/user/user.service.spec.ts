@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserService } from './user.service';
@@ -7,6 +8,7 @@ import { User } from '../../entities/user.entity';
 import { BadRequestException, Logger, NotFoundException } from '@nestjs/common';
 import { UpdateUrlDto } from '../../dtos/update-url.dto';
 import { Url } from '@/core/url/entities/url.entity';
+import { DeleteUrlDto } from '../../dtos/delete-url.dto';
 
 describe('UserService', () => {
   let service: UserService;
@@ -25,6 +27,10 @@ describe('UserService', () => {
     id: 'user-id',
     urls: [mockUrl],
   } as unknown as User;
+  const mockUserNoUrl = {
+    ...mockUser,
+    urls: [],
+  };
 
   beforeEach(async () => {
     userRepository = {
@@ -88,9 +94,7 @@ describe('UserService', () => {
     });
 
     it('Deve retornar um array vazio se o usuário não tiver URLs', async () => {
-      const mockUser = { id: 'user-id', urls: [] } as unknown as User;
-
-      userRepository.findOne.mockResolvedValue(mockUser);
+      userRepository.findOne.mockResolvedValue(mockUserNoUrl);
 
       const result = await service.listUrls('user-id');
 
@@ -136,9 +140,7 @@ describe('UserService', () => {
     });
 
     it('Deve lançar NotFoundException se a URL com o shortCode não for encontrada', async () => {
-      const mockUser = { id: 'user-id', urls: [] } as unknown as User;
-
-      userRepository.findOne.mockResolvedValue(mockUser);
+      userRepository.findOne.mockResolvedValue(mockUserNoUrl);
 
       await expect(service.getUrlByShortCode('user-id', 'abc123')).rejects.toThrowError(
         new NotFoundException('URL não encontrada'),
@@ -187,8 +189,7 @@ describe('UserService', () => {
     });
 
     it('Deve lançar NotFoundException se a URL com o shortCode não for encontrada', async () => {
-      const mockUserSemUrl = { ...mockUser, urls: [] };
-      userRepository.findOne.mockResolvedValue(mockUserSemUrl);
+      userRepository.findOne.mockResolvedValue(mockUserNoUrl);
 
       await expect(service.updateOneUrl('user-id', body)).rejects.toThrowError(
         new NotFoundException('URL não encontrada'),
@@ -201,6 +202,81 @@ describe('UserService', () => {
 
       await expect(service.updateOneUrl('user-id', body)).rejects.toThrowError(
         new BadRequestException('Erro ao atualizar a URL'),
+      );
+    });
+  });
+
+  describe('deleteOneUrl', () => {
+    const deletedAt = new Date('2023-04-22T00:00:00.000Z');
+
+    const body: DeleteUrlDto = {
+      shortCode: 'abc123',
+    };
+
+    it('Deve deletar logicamente a URL com sucesso', async () => {
+      userRepository.findOne.mockResolvedValue(mockUser);
+      urlRepository.save.mockResolvedValue({ ...mockUrl, deletedAt });
+
+      const result = await service.deleteOneUrl('user-id', body);
+
+      expect(userRepository.findOne).toHaveBeenCalledWith({
+        where: { id: 'user-id' },
+        relations: ['urls'],
+      });
+
+      expect(urlRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ...mockUrl,
+        }),
+      );
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          id: mockUrl.id,
+          shortCode: mockUrl.shortCode,
+          shortUrl: `http://localhost:3000/${mockUrl.shortCode}`,
+          targetUrl: mockUrl.targetUrl,
+          clicks: mockUrl.clicks,
+          createdAt: mockUrl.createdAt,
+          deletedAt: expect.any(Date),
+        }),
+      );
+    });
+
+    it('Deve lançar BadRequestException se ocorrer erro ao salvar', async () => {
+      userRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        urls: [
+          {
+            id: 'url-id',
+            shortCode: 'abc123',
+            targetUrl: 'https://example.com',
+            clicks: 10,
+            createdAt: new Date('2023-01-01T00:00:00.000Z'),
+            updatedAt: new Date('2023-01-01T00:00:00.000Z'),
+          },
+        ],
+      });
+      urlRepository.save.mockRejectedValue(new Error('Erro de DB'));
+
+      await expect(service.deleteOneUrl('user-id', body)).rejects.toThrow(
+        new BadRequestException('Erro ao deletar a URL'),
+      );
+    });
+
+    it('Deve lançar NotFoundException se a URL não for encontrada', async () => {
+      userRepository.findOne.mockResolvedValue(mockUserNoUrl);
+
+      await expect(service.deleteOneUrl('user-id', body)).rejects.toThrowError(
+        new NotFoundException('URL não encontrada'),
+      );
+    });
+
+    it('Deve lançar NotFoundException se o usuário não for encontrado', async () => {
+      userRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.deleteOneUrl('inexistente', body)).rejects.toThrowError(
+        new NotFoundException('Usuário não encontrado'),
       );
     });
   });
