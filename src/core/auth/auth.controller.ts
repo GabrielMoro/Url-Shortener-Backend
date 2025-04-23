@@ -16,6 +16,18 @@ export class AuthController {
     return this.authService.register(input);
   }
 
+  @ApiOperation({ summary: 'Realizar login' })
+  @ApiResponse({
+    status: 200,
+    description: 'Login bem-sucedido, retorna o token de acesso',
+    schema: {
+      example: { accessToken: 'Bearer <token>' },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Credenciais inválidas',
+  })
   @Post('login')
   public login(@Body() input: UserCredentialsDTO) {
     return this.authService.login(input);
