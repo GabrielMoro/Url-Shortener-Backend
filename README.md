@@ -195,6 +195,5 @@ Abaixo está a estrutura do projeto (gerada com _Draw Folder Structure_)
     └── package.json
     └── README.md
     └── tsconfig.build.json
-    └── tsconfig.build.tsbuildinfo
     └── tsconfig.json
 ```
