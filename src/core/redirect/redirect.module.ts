@@ -3,10 +3,11 @@ import { RedirectController } from './redirect.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Url } from '../url/entities/url.entity';
 import { UrlService } from '../url/services/url/url.service';
+import { User } from '../user/entities/user.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Url])],
-  controllers: [RedirectController],
+  imports: [TypeOrmModule.forFeature([Url, User])],
   providers: [UrlService, Logger],
+  controllers: [RedirectController],
 })
 export class RedirectModule {}

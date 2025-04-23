@@ -126,7 +126,7 @@ describe('AuthService', () => {
       });
 
       expect(jwtService.sign).toHaveBeenCalledWith({
-        userId: user.id,
+        id: user.id,
         email: user.email,
       });
 

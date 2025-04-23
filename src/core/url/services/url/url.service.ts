@@ -12,19 +12,29 @@ export class UrlService {
   public constructor(
     @InjectRepository(Url)
     private readonly urlRepository: Repository<Url>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
     private readonly logger: Logger,
   ) {}
 
   async shorten(input: CreateUrlDto, user?: User): Promise<ShortenedUrlReturnDto> {
     this.logger.log('Iniciando encurtamento de URL');
-    this.logger.log('Usuário autenticado:', user?.email);
+    this.logger.log('Usuário autenticado:', user);
 
     const shortCode = generateHash(6);
+
+    const userEntity = user?.id
+      ? await this.userRepository.findOne({
+          where: { id: user.id },
+        })
+      : undefined;
+
+    this.logger.log('User Entity', userEntity);
 
     const urlEntry: Partial<Url> = {
       targetUrl: input.targetUrl,
       shortCode,
-      user: user ?? undefined,
+      user: userEntity ?? undefined,
     };
     const url = this.urlRepository.create(urlEntry);
 

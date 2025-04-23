@@ -4,9 +4,10 @@ import { UrlService } from './services/url/url.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Url } from './entities/url.entity';
 import { AuthorizationModule } from '@/infra/guard/authorization.module';
+import { User } from '../user/entities/user.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Url]), AuthorizationModule],
+  imports: [TypeOrmModule.forFeature([Url, User]), AuthorizationModule],
   controllers: [UrlController],
   providers: [UrlService, Logger],
 })
