@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
-import { AuthModule } from './guard/auth.module';
+import { AuthorizationModule } from './guard/authorization.module';
 import { DatabaseModule } from './database/database.module';
 
 @Module({
-  imports: [AuthModule, DatabaseModule],
-  exports: [AuthModule, DatabaseModule],
+  imports: [AuthorizationModule, DatabaseModule],
+  exports: [AuthorizationModule, DatabaseModule],
 })
 export class InfraModule {}
