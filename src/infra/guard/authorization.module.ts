@@ -1,10 +1,12 @@
-import { Module } from '@nestjs/common';
+import 'dotenv/config';
+import { Logger, Module } from '@nestjs/common';
 import { AuthGuard } from './authorization.guard';
-import { JwtService } from '@nestjs/jwt';
+import { JwtModule, JwtService } from '@nestjs/jwt';
 import { OptionalAuthGuard } from './optional-auth.guard';
 
 @Module({
-  providers: [AuthGuard, OptionalAuthGuard, JwtService],
-  exports: [AuthGuard, OptionalAuthGuard, JwtService],
+  imports: [JwtModule],
+  providers: [AuthGuard, OptionalAuthGuard, JwtService, Logger],
+  exports: [AuthGuard, OptionalAuthGuard, JwtService, Logger],
 })
 export class AuthorizationModule {}

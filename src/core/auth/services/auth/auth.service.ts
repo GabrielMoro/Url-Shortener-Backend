@@ -50,7 +50,9 @@ export class AuthService {
       email: user.email,
     };
 
-    const accessToken = this.jwtService.sign(payload);
+    const accessToken = this.jwtService.sign(payload, {
+      secret: process.env.JWT_SECRET || 'dev-secret',
+    });
 
     this.logger.log(`Usuário autenticado: ${user.email}`);
 

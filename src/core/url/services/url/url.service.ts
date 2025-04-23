@@ -17,6 +17,7 @@ export class UrlService {
 
   async shorten(input: CreateUrlDto, user?: User): Promise<ShortenedUrlReturnDto> {
     this.logger.log('Iniciando encurtamento de URL');
+    this.logger.log('Usuário autenticado:', user?.email);
 
     const shortCode = generateHash(6);
 
@@ -30,6 +31,8 @@ export class UrlService {
     await this.urlRepository.save(url);
 
     const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+
+    this.logger.log('URL encurtada', urlEntry);
 
     return {
       shortUrl: `${baseUrl}/${shortCode}`,
@@ -47,6 +50,8 @@ export class UrlService {
     });
 
     if (!url) {
+      this.logger.error('URL não encontrada ou foi removida');
+
       throw new NotFoundException('URL não encontrada ou foi removida');
     }
 
