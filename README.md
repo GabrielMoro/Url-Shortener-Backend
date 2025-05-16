@@ -147,6 +147,13 @@ Abaixo está a estrutura do projeto (gerada com _Draw Folder Structure_)
                 └── redirect.controller.ts
                 └── redirect.module.ts
             └── 📁url
+                └── 📁controllers
+                    └── 📁redirect
+                        └── redirect.controller.ts
+                        └── redirect.module.ts
+                    └── 📁url
+                        └── url.controller.ts
+                        └── url.module.ts
                 └── 📁dtos
                     └── create-url.dto.ts
                     └── shortened-url-return.dto.ts
@@ -156,8 +163,6 @@ Abaixo está a estrutura do projeto (gerada com _Draw Folder Structure_)
                     └── 📁url
                         └── url.service.spec.ts
                         └── url.service.ts
-                └── url.controller.ts
-                └── url.module.ts
             └── 📁user
                 └── 📁dtos
                     └── delete-url.dto.ts
