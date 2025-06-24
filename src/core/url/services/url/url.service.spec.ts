@@ -5,7 +5,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Url } from '../../entities/url.entity';
 import { User } from '@/core/user/entities/user.entity';
 import { Logger, NotFoundException } from '@nestjs/common';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { CreateUrlDto } from '../../dtos/create-url.dto';
 
 jest.mock('@/common/utils/hash.util', () => ({
@@ -108,7 +108,10 @@ describe('UrlService', () => {
       const result = await service.redirect('abc123');
 
       expect(urlRepository.findOne).toHaveBeenCalledWith({
-        where: { shortCode: 'abc123', deletedAt: undefined },
+        where: {
+          shortCode: 'abc123',
+          deletedAt: IsNull(),
+        },
       });
       expect(urlRepository.save).toHaveBeenCalled();
       expect(result).toBe('https://example.com');
