@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  app:
+    container_name: my-url-shortener
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '3000:3000'
+    env_file:
+      - .env.local
+    volumes:
+      - /app/node_modules
+    command: npm run start:dev

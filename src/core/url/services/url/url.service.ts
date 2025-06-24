@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { Url } from '../../entities/url.entity';
 import { CreateUrlDto } from '../../dtos/create-url.dto';
 import { User } from '@/core/user/entities/user.entity';
@@ -55,7 +55,7 @@ export class UrlService {
     const url = await this.urlRepository.findOne({
       where: {
         shortCode,
-        deletedAt: undefined,
+        deletedAt: IsNull(),
       },
     });
 

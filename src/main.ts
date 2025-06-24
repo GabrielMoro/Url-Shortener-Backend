@@ -5,7 +5,7 @@ import { Logger } from '@nestjs/common';
 import * as dotenv from 'dotenv';
 
 async function bootstrap() {
-  dotenv.config();
+  dotenv.config({ path: process.env.ENV_FILE || '.env.local' });
 
   const app = await NestFactory.create(AppModule);
 
