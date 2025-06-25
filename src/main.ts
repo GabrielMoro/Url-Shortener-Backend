@@ -24,9 +24,8 @@ async function bootstrap() {
   logger.log('Iniciando aplicação...');
 
   const port = process.env.PORT ?? 3000;
-  const hostName = process.env.HOSTNAME ?? 'localhost';
-  await app.listen(port, hostName);
-  logger.log(`Aplicação rodando em ${hostName}, porta ${port}`);
-  logger.log(`Swagger em ${hostName}/api/docs, porta ${port}`);
+  await app.listen(port, '0.0.0.0');
+  logger.log(`Aplicação rodando na porta ${port}`);
+  logger.log(`Swagger em /api/docs`);
 }
 bootstrap();

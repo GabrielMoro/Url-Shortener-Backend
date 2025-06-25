@@ -130,7 +130,10 @@ describe('AuthService', () => {
           id: user.id,
           email: user.email,
         },
-        { secret: 'dev-secret' },
+        {
+          secret: 'dev-secret',
+          expiresIn: '1h',
+        },
       );
 
       expect(result).toEqual({ accessToken: 'Bearer fake-jwt-token' });
