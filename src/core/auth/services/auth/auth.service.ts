@@ -52,6 +52,7 @@ export class AuthService {
 
     const accessToken = this.jwtService.sign(payload, {
       secret: process.env.JWT_SECRET || 'dev-secret',
+      expiresIn: '1h',
     });
 
     this.logger.log(`Usuário autenticado: ${user.email}`);
