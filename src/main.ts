@@ -20,9 +20,13 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);
 
+  logger.log('Swagger configurado');
+  logger.log('Iniciando aplicação...');
+
   const port = process.env.PORT ?? 3000;
-  await app.listen(port);
-  logger.log(`Aplicação rodando em http://localhost:${port}`);
-  logger.log(`Swagger em http://localhost:${port}/api/docs`);
+  const hostName = process.env.HOSTNAME ?? 'localhost';
+  await app.listen(port, hostName);
+  logger.log(`Aplicação rodando em ${hostName}, porta ${port}`);
+  logger.log(`Swagger em ${hostName}/api/docs, porta ${port}`);
 }
 bootstrap();
