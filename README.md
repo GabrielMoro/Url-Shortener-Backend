@@ -1,6 +1,6 @@
-# Url-Shortener
+# Url-Shortener-Backend
 
-Implementação de um sistema que encurta URLs
+Implementação do backend de um sistema que encurta URLs
 
 ## Tecnologias Utilizadas
 
