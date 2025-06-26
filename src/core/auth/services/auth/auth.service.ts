@@ -16,7 +16,7 @@ export class AuthService {
     private readonly logger: Logger,
   ) {}
 
-  async register(input: UserCredentialsDTO): Promise<User> {
+  public async register(input: UserCredentialsDTO): Promise<User> {
     this.logger.log('Iniciando cadastro de usuário');
 
     const emailInUse = await this.userRepository.findOne({ where: { email: input.email } });
@@ -34,7 +34,7 @@ export class AuthService {
     return this.userRepository.save(user);
   }
 
-  async login(input: UserCredentialsDTO): Promise<LoginReturnDto> {
+  public async login(input: UserCredentialsDTO): Promise<LoginReturnDto> {
     this.logger.log('Iniciando login');
     const hashedPassword = crypto.createHash('sha256').update(input.password).digest('hex');
 
@@ -51,8 +51,8 @@ export class AuthService {
     };
 
     const accessToken = this.jwtService.sign(payload, {
-      secret: process.env.JWT_SECRET || 'dev-secret',
-      expiresIn: '1h',
+      secret: process.env.JWT_SECRET ?? 'dev-secret',
+      expiresIn: process.env.TOKEN_TIMEOUT ?? '1h',
     });
 
     this.logger.log(`Usuário autenticado: ${user.email}`);

@@ -3,12 +3,23 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserService } from './user.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository, SelectQueryBuilder } from 'typeorm';
+import { ObjectLiteral, Repository, SelectQueryBuilder } from 'typeorm';
 import { User } from '../../entities/user.entity';
-import { BadRequestException, Logger, NotFoundException } from '@nestjs/common';
+import { InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { UpdateUrlDto } from '../../dtos/update-url.dto';
 import { Url } from '@/core/url/entities/url.entity';
 import { DeleteUrlDto } from '../../dtos/delete-url.dto';
+
+function mockRepositoryQueryBuilder<T extends ObjectLiteral>(result: T | T[] | null) {
+  const qb: Partial<SelectQueryBuilder<T>> = {
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    leftJoinAndSelect: jest.fn().mockReturnThis(),
+    getOne: jest.fn().mockResolvedValue(result),
+    getMany: jest.fn().mockResolvedValue(result),
+  };
+  return qb as SelectQueryBuilder<T>;
+}
 
 describe('UserService', () => {
   let service: UserService;
@@ -35,9 +46,14 @@ describe('UserService', () => {
   beforeEach(async () => {
     userRepository = {
       createQueryBuilder: jest.fn(),
-    } as unknown as jest.Mocked<Repository<User>>;
-    urlRepository = {
       save: jest.fn(),
+      findOne: jest.fn(),
+    } as unknown as jest.Mocked<Repository<User>>;
+
+    urlRepository = {
+      createQueryBuilder: jest.fn(),
+      save: jest.fn(),
+      findOne: jest.fn(),
     } as unknown as jest.Mocked<Repository<Url>>;
 
     const module: TestingModule = await Test.createTestingModule({
@@ -56,6 +72,7 @@ describe('UserService', () => {
           useValue: {
             log: jest.fn(),
             error: jest.fn(),
+            warn: jest.fn(),
           },
         },
       ],
@@ -72,89 +89,198 @@ describe('UserService', () => {
 
   describe('listUrls', () => {
     it('Deve retornar uma lista de URLs para o usuário', async () => {
-      mockQueryBuilder(mockUser);
+      userRepository.createQueryBuilder.mockReturnValue(mockRepositoryQueryBuilder(mockUser));
 
       const result = await service.listUrls('user-id');
 
+      expect(userRepository.createQueryBuilder).toHaveBeenCalledWith('user');
       expect(result).toEqual([
         {
-          id: 'url-id',
-          shortCode: 'abc123',
-          shortUrl: 'http://localhost:3000/abc123',
-          targetUrl: 'https://example.com',
-          clicks: 10,
-          createdAt: new Date('2023-01-01T00:00:00.000Z'),
+          id: mockUrl.id,
+          shortCode: mockUrl.shortCode,
+          shortUrl: `http://localhost:3000/${mockUrl.shortCode}`,
+          targetUrl: mockUrl.targetUrl,
+          clicks: mockUrl.clicks,
+          createdAt: mockUrl.createdAt,
+          updatedAt: mockUrl.updatedAt,
         },
       ]);
     });
 
     it('Deve retornar um array vazio se o usuário não tiver URLs', async () => {
-      mockQueryBuilder(mockUserNoUrl);
+      userRepository.createQueryBuilder.mockReturnValue(
+        mockRepositoryQueryBuilder(mockUserNoUrl) as SelectQueryBuilder<User>,
+      );
 
       const result = await service.listUrls('user-id');
 
+      expect(userRepository.createQueryBuilder).toHaveBeenCalledWith('user');
       expect(result).toEqual([]);
     });
 
-    it('deve retornar um array vazio se o usuário não for encontrado', async () => {
-      mockQueryBuilder(null);
+    it('Deve lançar NotFoundException se o usuário não for encontrado', async () => {
+      userRepository.createQueryBuilder.mockReturnValue(
+        mockRepositoryQueryBuilder(null) as unknown as SelectQueryBuilder<User>,
+      );
 
-      const result = await service.listUrls('inexistente');
+      await expect(service.listUrls('inexistente')).rejects.toThrow(
+        new NotFoundException('Usuário não encontrado'),
+      );
+    });
 
-      expect(result).toEqual([]);
+    it('Deve lançar InternalServerErrorException se a busca de URLs do usuário falhar', async () => {
+      userRepository.createQueryBuilder.mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockRejectedValue(new Error('DB connection error')),
+      } as unknown as SelectQueryBuilder<User>);
+
+      await expect(service.listUrls('user-id')).rejects.toThrow(
+        new InternalServerErrorException('Erro ao buscar URLs do usuário'),
+      );
     });
   });
 
   describe('getUrlByShortCode', () => {
     it('Deve retornar a URL correspondente ao shortCode', async () => {
-      mockQueryBuilder(mockUser);
+      urlRepository.createQueryBuilder.mockReturnValue(
+        mockRepositoryQueryBuilder(mockUrl) as SelectQueryBuilder<Url>,
+      );
 
       const result = await service.getUrlByShortCode('user-id', 'abc123');
 
+      expect(urlRepository.createQueryBuilder).toHaveBeenCalledWith('url');
       expect(result).toEqual({
-        id: 'url-id',
-        shortCode: 'abc123',
-        shortUrl: 'http://localhost:3000/abc123',
-        targetUrl: 'https://example.com',
-        clicks: 10,
-        createdAt: new Date('2023-01-01T00:00:00.000Z'),
+        id: mockUrl.id,
+        shortCode: mockUrl.shortCode,
+        shortUrl: `http://localhost:3000/${mockUrl.shortCode}`,
+        targetUrl: mockUrl.targetUrl,
+        clicks: mockUrl.clicks,
+        createdAt: mockUrl.createdAt,
+        updatedAt: mockUrl.updatedAt,
       });
     });
 
-    it('Deve lançar NotFoundException se o usuário não for encontrado', async () => {
-      mockQueryBuilder(null);
+    it('Deve lançar NotFoundException se a URL não for encontrada ou não pertencer ao usuário', async () => {
+      urlRepository.createQueryBuilder.mockReturnValue(
+        mockRepositoryQueryBuilder(null) as unknown as SelectQueryBuilder<Url>,
+      );
 
-      await expect(service.getUrlByShortCode('inexistente', 'abc123')).rejects.toThrow(
-        new NotFoundException('URL não encontrada'),
+      await expect(service.getUrlByShortCode('user-id', 'invalid')).rejects.toThrow(
+        new NotFoundException('URL não encontrada ou não pertence ao usuário'),
       );
     });
 
-    it('Deve lançar NotFoundException se a URL com o shortCode não for encontrada', async () => {
-      mockQueryBuilder(mockUserNoUrl);
+    it('Deve lançar InternalServerErrorException se a busca da URL falhar', async () => {
+      urlRepository.createQueryBuilder.mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockRejectedValue(new Error('DB connection lost during URL search')),
+      } as unknown as SelectQueryBuilder<Url>);
 
       await expect(service.getUrlByShortCode('user-id', 'abc123')).rejects.toThrow(
-        new NotFoundException('URL não encontrada'),
+        new InternalServerErrorException('Erro ao buscar URLs do usuário'),
+      );
+    });
+  });
+
+  describe('deleteOneUrl', () => {
+    const deletedAt = new Date();
+    const body: DeleteUrlDto = {
+      shortCode: 'abc123',
+    };
+    const deletedUrl = { ...mockUrl, deletedAt } as Url;
+
+    it('Deve deletar logicamente a URL com sucesso', async () => {
+      urlRepository.createQueryBuilder.mockReturnValue(
+        mockRepositoryQueryBuilder(mockUrl) as SelectQueryBuilder<Url>,
+      );
+      urlRepository.save.mockResolvedValue(deletedUrl);
+
+      const result = await service.deleteOneUrl('user-id', body);
+
+      expect(urlRepository.createQueryBuilder).toHaveBeenCalledWith('url');
+      expect(urlRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ...deletedUrl,
+          deletedAt: expect.any(Date),
+        }),
+      );
+      expect(result).toEqual(
+        expect.objectContaining({
+          id: deletedUrl.id,
+          shortCode: deletedUrl.shortCode,
+          shortUrl: `http://localhost:3000/${deletedUrl.shortCode}`,
+          targetUrl: deletedUrl.targetUrl,
+          clicks: deletedUrl.clicks,
+          createdAt: deletedUrl.createdAt,
+          updatedAt: deletedUrl.updatedAt,
+          deletedAt: expect.any(Date),
+        }),
+      );
+    });
+
+    it('Deve lançar NotFoundException se a URL não for encontrada ou não pertencer ao usuário', async () => {
+      urlRepository.createQueryBuilder.mockReturnValue(
+        mockRepositoryQueryBuilder(null) as unknown as SelectQueryBuilder<Url>,
+      );
+
+      await expect(service.deleteOneUrl('user-id', body)).rejects.toThrow(
+        new NotFoundException('URL não encontrada ou não pertence ao usuário'),
+      );
+    });
+
+    it('Deve lançar InternalServerErrorException se ocorrer erro ao salvar a exclusão lógica', async () => {
+      urlRepository.createQueryBuilder.mockReturnValue(
+        mockRepositoryQueryBuilder(mockUrl) as SelectQueryBuilder<Url>,
+      );
+      urlRepository.save.mockRejectedValue(new Error('DB delete failed'));
+
+      await expect(service.deleteOneUrl('user-id', body)).rejects.toThrow(
+        new InternalServerErrorException('Erro ao deletar a URL'),
+      );
+    });
+
+    it('Deve lançar InternalServerErrorException se a busca da URL para exclusão falhar', async () => {
+      urlRepository.createQueryBuilder.mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        getOne: jest
+          .fn()
+          .mockRejectedValue(new Error('DB connection lost during fetch for delete')),
+      } as unknown as SelectQueryBuilder<Url>);
+
+      await expect(service.deleteOneUrl('user-id', body)).rejects.toThrow(
+        new InternalServerErrorException('Erro ao buscar URLs do usuário'),
       );
     });
   });
 
   describe('updateOneUrl', () => {
-    const body: UpdateUrlDto = {
-      shortCode: 'abc123',
-      newUrl: 'https://new-url.com',
-    };
-
     it('Deve atualizar a URL corretamente', async () => {
-      mockQueryBuilder(mockUser);
-      urlRepository.save.mockResolvedValue({ ...mockUrl, targetUrl: body.newUrl });
+      const body: UpdateUrlDto = {
+        shortCode: 'abc123',
+        newUrl: 'https://new-url.com',
+      };
+      const updatedUrl = { ...mockUrl, targetUrl: body.newUrl, updatedAt: new Date() } as Url;
+
+      urlRepository.createQueryBuilder.mockReturnValue(
+        mockRepositoryQueryBuilder(mockUrl) as SelectQueryBuilder<Url>,
+      );
+      urlRepository.save.mockResolvedValue(updatedUrl);
 
       const result = await service.updateOneUrl('user-id', body);
 
-      expect(urlRepository.save).toHaveBeenCalledWith({
-        ...mockUrl,
-        targetUrl: body.newUrl,
-      });
-
+      expect(urlRepository.createQueryBuilder).toHaveBeenCalledWith('url');
+      expect(urlRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ...mockUrl,
+          targetUrl: body.newUrl,
+        }),
+      );
       expect(result).toEqual({
         id: mockUrl.id,
         shortCode: mockUrl.shortCode,
@@ -162,112 +288,57 @@ describe('UserService', () => {
         targetUrl: body.newUrl,
         clicks: mockUrl.clicks,
         createdAt: mockUrl.createdAt,
+        updatedAt: updatedUrl.updatedAt,
       });
     });
 
-    it('Deve lançar NotFoundException se o usuário não for encontrado', async () => {
-      mockQueryBuilder(null);
+    it('Deve lançar NotFoundException se a URL não for encontrada ou não pertencer ao usuário', async () => {
+      const body: UpdateUrlDto = {
+        shortCode: 'abc123',
+        newUrl: 'https://new-url.com',
+      };
 
-      await expect(service.updateOneUrl('inexistente', body)).rejects.toThrow(
-        new NotFoundException('Usuário não encontrado'),
+      urlRepository.createQueryBuilder.mockReturnValue(
+        mockRepositoryQueryBuilder(null) as unknown as SelectQueryBuilder<Url>,
+      );
+
+      await expect(service.updateOneUrl('user-id', body)).rejects.toThrow(
+        new NotFoundException('URL não encontrada ou não pertence ao usuário'),
       );
     });
 
-    it('Deve lançar NotFoundException se a URL com o shortCode não for encontrada', async () => {
-      mockQueryBuilder(mockUserNoUrl);
+    it('Deve lançar InternalServerErrorException se a atualização falhar', async () => {
+      const body: UpdateUrlDto = {
+        shortCode: 'abc123',
+        newUrl: 'https://new-url.com',
+      };
+
+      urlRepository.createQueryBuilder.mockReturnValue(
+        mockRepositoryQueryBuilder(mockUrl) as SelectQueryBuilder<Url>,
+      );
+      urlRepository.save.mockRejectedValue(new Error('DB update failed'));
 
       await expect(service.updateOneUrl('user-id', body)).rejects.toThrow(
-        new NotFoundException('URL não encontrada'),
+        new InternalServerErrorException('Erro ao atualizar a URL'),
       );
     });
 
-    it('Deve lançar BadRequestException se a atualização falhar', async () => {
-      mockQueryBuilder(mockUser);
-      urlRepository.save.mockRejectedValue(new Error('Erro inesperado'));
+    it('Deve lançar InternalServerErrorException se a busca da URL para atualização falhar', async () => {
+      const body: UpdateUrlDto = {
+        shortCode: 'abc123',
+        newUrl: 'https://new-url.com',
+      };
+
+      urlRepository.createQueryBuilder.mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockRejectedValue(new Error('Network error during fetch')),
+      } as unknown as SelectQueryBuilder<Url>);
 
       await expect(service.updateOneUrl('user-id', body)).rejects.toThrow(
-        new BadRequestException('Erro ao atualizar a URL'),
+        new InternalServerErrorException('Erro ao buscar URLs do usuário'),
       );
     });
   });
-
-  describe('deleteOneUrl', () => {
-    const deletedAt = new Date('2023-04-22T00:00:00.000Z');
-
-    const body: DeleteUrlDto = {
-      shortCode: 'abc123',
-    };
-
-    it('Deve deletar logicamente a URL com sucesso', async () => {
-      mockQueryBuilder(mockUser);
-      urlRepository.save.mockResolvedValue({ ...mockUrl, deletedAt });
-
-      const result = await service.deleteOneUrl('user-id', body);
-
-      expect(urlRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          ...mockUrl,
-        }),
-      );
-
-      expect(result).toEqual(
-        expect.objectContaining({
-          id: mockUrl.id,
-          shortCode: mockUrl.shortCode,
-          shortUrl: `http://localhost:3000/${mockUrl.shortCode}`,
-          targetUrl: mockUrl.targetUrl,
-          clicks: mockUrl.clicks,
-          createdAt: mockUrl.createdAt,
-          deletedAt: expect.any(Date),
-        }),
-      );
-    });
-
-    it('Deve lançar BadRequestException se ocorrer erro ao salvar', async () => {
-      mockQueryBuilder({
-        ...mockUser,
-        urls: [
-          {
-            id: 'url-id',
-            shortCode: 'abc123',
-            targetUrl: 'https://example.com',
-            clicks: 10,
-            createdAt: new Date('2023-01-01T00:00:00.000Z'),
-            updatedAt: new Date('2023-01-01T00:00:00.000Z'),
-          },
-        ],
-      });
-      urlRepository.save.mockRejectedValue(new Error('Erro de DB'));
-
-      await expect(service.deleteOneUrl('user-id', body)).rejects.toThrow(
-        new BadRequestException('Erro ao deletar a URL'),
-      );
-    });
-
-    it('Deve lançar NotFoundException se a URL não for encontrada', async () => {
-      mockQueryBuilder(mockUserNoUrl);
-
-      await expect(service.deleteOneUrl('user-id', body)).rejects.toThrow(
-        new NotFoundException('URL não encontrada'),
-      );
-    });
-
-    it('Deve lançar NotFoundException se o usuário não for encontrado', async () => {
-      mockQueryBuilder(null);
-
-      await expect(service.deleteOneUrl('inexistente', body)).rejects.toThrow(
-        new NotFoundException('Usuário não encontrado'),
-      );
-    });
-  });
-
-  function mockQueryBuilder(result: User | null) {
-    const qb: Partial<SelectQueryBuilder<User>> = {
-      leftJoinAndSelect: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      getOne: jest.fn().mockResolvedValue(result),
-    };
-
-    userRepository.createQueryBuilder.mockReturnValue(qb as SelectQueryBuilder<User>);
-  }
 });

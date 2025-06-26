@@ -1,18 +1,9 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  UpdateDateColumn,
-  ManyToOne,
-} from 'typeorm';
+import { Entity, Column, ManyToOne } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
+import { BaseEntity } from '@/common/entities/base.entity';
 
 @Entity()
-export class Url {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class Url extends BaseEntity {
   @Column({ unique: true, length: 6 })
   shortCode: string;
 
@@ -24,13 +15,4 @@ export class Url {
 
   @ManyToOne(() => User, (user) => user.urls, { nullable: true, onDelete: 'SET NULL' })
   user?: User;
-
-  @CreateDateColumn()
-  createdAt: Date;
-
-  @UpdateDateColumn()
-  updatedAt: Date;
-
-  @Column({ nullable: true })
-  deletedAt?: Date;
 }
