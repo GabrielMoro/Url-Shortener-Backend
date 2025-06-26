@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { Url } from '../../entities/url.entity';
@@ -17,39 +23,81 @@ export class UrlService {
     private readonly logger: Logger,
   ) {}
 
-  async shorten(input: CreateUrlDto, user?: User): Promise<ShortenedUrlReturnDto> {
+  public async shorten(input: CreateUrlDto, user?: User): Promise<ShortenedUrlReturnDto> {
     this.logger.log('Iniciando encurtamento de URL');
     this.logger.log('Usuário autenticado:', user);
 
-    const shortCode = generateHash(6);
-
-    const userEntity = user?.id
-      ? await this.userRepository.findOne({
+    const userPromise = user?.id
+      ? this.userRepository.findOne({
           where: { id: user.id },
         })
       : undefined;
 
-    this.logger.log('User Entity', userEntity);
+    try {
+      const [shortCode, userEntity] = await Promise.all([
+        this.generateUniqueShortCode(6),
+        userPromise,
+      ]);
 
-    const urlEntry: Partial<Url> = {
-      targetUrl: input.targetUrl,
-      shortCode,
-      user: userEntity ?? undefined,
-    };
-    const url = this.urlRepository.create(urlEntry);
+      this.logger.log(`Código gerado: ${shortCode}`);
 
-    await this.urlRepository.save(url);
+      const urlEntry: Partial<Url> = {
+        targetUrl: input.targetUrl,
+        shortCode,
+        user: userEntity ?? undefined,
+      };
+      const url = this.urlRepository.create(urlEntry);
 
-    const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+      await this.urlRepository.save(url);
 
-    this.logger.log('URL encurtada', urlEntry);
+      const baseUrl = process.env.BASE_URL ?? `http://localhost:${process.env.PORT ?? 3000}`;
 
-    return {
-      shortUrl: `${baseUrl}/${shortCode}`,
-    };
+      this.logger.log('URL encurtada', urlEntry);
+
+      return {
+        shortUrl: `${baseUrl}/${shortCode}`,
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        this.logger.error('Erro ao gerar código para URL:', error.message, error.stack);
+
+        throw error;
+      }
+
+      this.logger.error(
+        'Erro inesperado ao encurtar URL:',
+        (error as Error).message,
+        (error as Error).stack,
+      );
+
+      throw new InternalServerErrorException('Erro inesperado ao encurtar URL');
+    }
   }
 
-  async redirect(shortCode: string): Promise<string> {
+  private async generateUniqueShortCode(lenght: number): Promise<string> {
+    this.logger.log(`Gerando código curto único de ${lenght} caracteres`);
+    const MaxAttempts = 10;
+
+    let shortCode: string;
+
+    for (let attempts = 0; attempts < MaxAttempts; attempts++) {
+      shortCode = generateHash(lenght);
+
+      const existingUrl = await this.urlRepository.findOne({
+        where: { shortCode, deletedAt: IsNull() },
+      });
+
+      if (!existingUrl) {
+        return shortCode;
+      }
+    }
+
+    throw new BadRequestException(
+      'Não foi possível gerar um código curto único após número máximo de tentativas',
+    );
+  }
+
+  public async redirect(shortCode: string): Promise<string> {
     this.logger.log('Iniciando lógica de redirecionamento');
 
     const url = await this.urlRepository.findOne({
@@ -60,14 +108,23 @@ export class UrlService {
     });
 
     if (!url) {
-      this.logger.error('URL não encontrada ou foi removida');
+      this.logger.warn('URL não encontrada', shortCode);
 
-      throw new NotFoundException('URL não encontrada ou foi removida');
+      throw new NotFoundException('URL não encontrada');
     }
 
-    url.clicks += 1;
-    await this.urlRepository.save(url);
+    try {
+      url.clicks += 1;
+      await this.urlRepository.save(url);
 
-    return url.targetUrl;
+      return url.targetUrl;
+    } catch (error: unknown) {
+      this.logger.error(
+        `Erro interno ao redirecionar para ${shortCode}:`,
+        (error as Error).message,
+        (error as Error).stack,
+      );
+      throw new InternalServerErrorException('Falha ao redirecionar para a URL');
+    }
   }
 }

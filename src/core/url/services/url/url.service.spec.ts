@@ -4,7 +4,12 @@ import { UrlService } from './url.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Url } from '../../entities/url.entity';
 import { User } from '@/core/user/entities/user.entity';
-import { Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { IsNull, Repository } from 'typeorm';
 import { CreateUrlDto } from '../../dtos/create-url.dto';
 
@@ -44,6 +49,7 @@ describe('UrlService', () => {
           useValue: {
             log: jest.fn(),
             error: jest.fn(),
+            warn: jest.fn(),
           },
         },
       ],
@@ -63,28 +69,32 @@ describe('UrlService', () => {
       const dto: CreateUrlDto = { targetUrl: 'https://example.com' };
       const user: User = { id: 'userId' } as User;
       const userEntity = { id: 'userId', email: 'test@example.com' } as User;
-      const url = { shortCode: 'abc123', targetUrl: dto.targetUrl };
+      const url = { shortCode: 'abc123', targetUrl: dto.targetUrl } as Url;
 
       userRepository.findOne.mockResolvedValue(userEntity);
-      urlRepository.create.mockReturnValue(url as Url);
-      urlRepository.save.mockResolvedValue(url as Url);
+      urlRepository.create.mockReturnValue(url);
+      urlRepository.save.mockResolvedValue(url);
+      urlRepository.findOne.mockResolvedValue(null);
 
       const result = await service.shorten(dto, user);
 
+      expect(userRepository.findOne).toHaveBeenCalledWith({ where: { id: user.id } });
       expect(urlRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
           targetUrl: dto.targetUrl,
           user: userEntity,
         }),
       );
+      expect(urlRepository.save).toHaveBeenCalledWith(url);
       expect(result.shortUrl).toMatch(/http:\/\/localhost:3000\/\w{6}/);
     });
 
     it('Deve encurtar uma url informada (sem usuário autenticado)', async () => {
       const dto: CreateUrlDto = { targetUrl: 'https://example.com' };
-      const url = { shortCode: 'abc123', targetUrl: dto.targetUrl };
-      urlRepository.create.mockReturnValue(url as Url);
-      urlRepository.save.mockResolvedValue(url as Url);
+      const url = { shortCode: 'abc123', targetUrl: dto.targetUrl } as Url;
+      urlRepository.create.mockReturnValue(url);
+      urlRepository.save.mockResolvedValue(url);
+      urlRepository.findOne.mockResolvedValue(null);
 
       const result = await service.shorten(dto);
 
@@ -95,7 +105,36 @@ describe('UrlService', () => {
           user: undefined,
         }),
       );
+      expect(urlRepository.save).toHaveBeenCalledWith(url);
       expect(result.shortUrl).toMatch(/http:\/\/localhost:3000\/\w{6}/);
+    });
+
+    it('Deve lançar BadRequestException se generateUniqueShortCode falhar após MaxAttempts', async () => {
+      const dto: CreateUrlDto = { targetUrl: 'https://example.com' };
+      urlRepository.findOne
+        .mockResolvedValueOnce({ shortCode: 'abc123' } as Url)
+        .mockResolvedValueOnce({ shortCode: 'abc123' } as Url)
+        .mockResolvedValueOnce({ shortCode: 'abc123' } as Url)
+        .mockResolvedValueOnce({ shortCode: 'abc123' } as Url)
+        .mockResolvedValueOnce({ shortCode: 'abc123' } as Url)
+        .mockResolvedValueOnce({ shortCode: 'abc123' } as Url)
+        .mockResolvedValueOnce({ shortCode: 'abc123' } as Url)
+        .mockResolvedValueOnce({ shortCode: 'abc123' } as Url)
+        .mockResolvedValueOnce({ shortCode: 'abc123' } as Url)
+        .mockResolvedValueOnce({ shortCode: 'abc123' } as Url);
+
+      await expect(service.shorten(dto)).rejects.toThrow(BadRequestException);
+    });
+
+    it('Deve lançar InternalServerErrorException se urlRepository.save falhar no shorten', async () => {
+      const dto: CreateUrlDto = { targetUrl: 'https://example.com' };
+      const url = { shortCode: 'abc123', targetUrl: dto.targetUrl } as Url;
+
+      urlRepository.findOne.mockResolvedValue(null);
+      urlRepository.create.mockReturnValue(url);
+      urlRepository.save.mockRejectedValue(new Error('DB connection lost'));
+
+      await expect(service.shorten(dto)).rejects.toThrow(InternalServerErrorException);
     });
   });
 
@@ -103,7 +142,7 @@ describe('UrlService', () => {
     it('Deve retornar targetUrl caso shortCode seja válido', async () => {
       const url = { targetUrl: 'https://example.com', clicks: 0 } as Url;
       urlRepository.findOne.mockResolvedValue(url);
-      urlRepository.save.mockResolvedValue({ ...url, clicks: 1 });
+      urlRepository.save.mockResolvedValue({ ...url, clicks: 1 } as Url);
 
       const result = await service.redirect('abc123');
 
@@ -113,7 +152,7 @@ describe('UrlService', () => {
           deletedAt: IsNull(),
         },
       });
-      expect(urlRepository.save).toHaveBeenCalled();
+      expect(urlRepository.save).toHaveBeenCalledWith(expect.objectContaining({ clicks: 1 }));
       expect(result).toBe('https://example.com');
     });
 
@@ -121,6 +160,14 @@ describe('UrlService', () => {
       urlRepository.findOne.mockResolvedValue(null);
 
       await expect(service.redirect('invalid')).rejects.toThrow(NotFoundException);
+    });
+
+    it('Deve lançar InternalServerErrorException se urlRepository.save falhar durante o incremento de cliques', async () => {
+      const url = { targetUrl: 'https://example.com', clicks: 0 } as Url;
+      urlRepository.findOne.mockResolvedValue(url);
+      urlRepository.save.mockRejectedValue(new Error('Failed to update clicks'));
+
+      await expect(service.redirect('abc123')).rejects.toThrow(InternalServerErrorException);
     });
   });
 });
