@@ -4,26 +4,31 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UserService } from './user.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ObjectLiteral, Repository, SelectQueryBuilder } from 'typeorm';
-import { User } from '../../entities/user.entity';
 import { InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { UpdateUrlDto } from '../../dtos/update-url.dto';
 import { Url } from '@/core/url/entities/url.entity';
 import { DeleteUrlDto } from '../../dtos/delete-url.dto';
+import { ListUrlDto } from '../../dtos/list-urls.dto';
 
 function mockRepositoryQueryBuilder<T extends ObjectLiteral>(result: T | T[] | null) {
   const qb: Partial<SelectQueryBuilder<T>> = {
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     leftJoinAndSelect: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    skip: jest.fn().mockReturnThis(),
+    take: jest.fn().mockReturnThis(),
     getOne: jest.fn().mockResolvedValue(result),
     getMany: jest.fn().mockResolvedValue(result),
+    getManyAndCount: jest
+      .fn()
+      .mockResolvedValue([result, Array.isArray(result) ? result.length : result ? 1 : 0]),
   };
   return qb as SelectQueryBuilder<T>;
 }
 
 describe('UserService', () => {
   let service: UserService;
-  let userRepository: jest.Mocked<Repository<User>>;
   let urlRepository: jest.Mocked<Repository<Url>>;
 
   const mockUrl = {
@@ -34,22 +39,8 @@ describe('UserService', () => {
     createdAt: new Date('2023-01-01T00:00:00.000Z'),
     updatedAt: new Date('2023-01-01T00:00:00.000Z'),
   };
-  const mockUser = {
-    id: 'user-id',
-    urls: [mockUrl],
-  } as unknown as User;
-  const mockUserNoUrl = {
-    ...mockUser,
-    urls: [],
-  };
 
   beforeEach(async () => {
-    userRepository = {
-      createQueryBuilder: jest.fn(),
-      save: jest.fn(),
-      findOne: jest.fn(),
-    } as unknown as jest.Mocked<Repository<User>>;
-
     urlRepository = {
       createQueryBuilder: jest.fn(),
       save: jest.fn(),
@@ -59,10 +50,6 @@ describe('UserService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UserService,
-        {
-          provide: getRepositoryToken(User),
-          useValue: userRepository,
-        },
         {
           provide: getRepositoryToken(Url),
           useValue: urlRepository,
@@ -79,7 +66,6 @@ describe('UserService', () => {
     }).compile();
 
     service = module.get<UserService>(UserService);
-    userRepository = module.get(getRepositoryToken(User));
     urlRepository = module.get(getRepositoryToken(Url));
   });
 
@@ -88,53 +74,86 @@ describe('UserService', () => {
   });
 
   describe('listUrls', () => {
-    it('Deve retornar uma lista de URLs para o usuário', async () => {
-      userRepository.createQueryBuilder.mockReturnValue(mockRepositoryQueryBuilder(mockUser));
+    it('Deve retornar uma lista de URLs paginada para o usuário', async () => {
+      const page = 1;
+      const limit = 10;
+      const totalEntries = 1;
+      const lastPage = Math.ceil(totalEntries / limit);
 
-      const result = await service.listUrls('user-id');
+      urlRepository.createQueryBuilder.mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getManyAndCount: jest.fn().mockResolvedValue([[mockUrl], totalEntries]), // Returns [urls, count]
+      } as unknown as SelectQueryBuilder<Url>);
 
-      expect(userRepository.createQueryBuilder).toHaveBeenCalledWith('user');
-      expect(result).toEqual([
-        {
-          id: mockUrl.id,
-          shortCode: mockUrl.shortCode,
-          shortUrl: `http://localhost:3000/${mockUrl.shortCode}`,
-          targetUrl: mockUrl.targetUrl,
-          clicks: mockUrl.clicks,
-          createdAt: mockUrl.createdAt,
-          updatedAt: mockUrl.updatedAt,
-        },
-      ]);
+      const result: ListUrlDto = await service.listUrls('user-id', page, limit);
+
+      expect(urlRepository.createQueryBuilder).toHaveBeenCalledWith('url');
+      expect(urlRepository.createQueryBuilder().where).toHaveBeenCalledWith(
+        'url.userId = :userId',
+        { userId: 'user-id' },
+      );
+      expect(urlRepository.createQueryBuilder().andWhere).toHaveBeenCalledWith(
+        'url.deletedAt IS NULL',
+      );
+      expect(urlRepository.createQueryBuilder().orderBy).toHaveBeenCalledWith(
+        'url.createdAt',
+        'DESC',
+      );
+      expect(urlRepository.createQueryBuilder().skip).toHaveBeenCalledWith(0); // (page - 1) * limit
+      expect(urlRepository.createQueryBuilder().take).toHaveBeenCalledWith(limit);
+
+      expect(result).toEqual({
+        totalEntries,
+        page,
+        lastPage,
+        data: [
+          {
+            id: mockUrl.id,
+            shortCode: mockUrl.shortCode,
+            shortUrl: `http://localhost:3000/${mockUrl.shortCode}`,
+            targetUrl: mockUrl.targetUrl,
+            clicks: mockUrl.clicks,
+            createdAt: mockUrl.createdAt,
+            updatedAt: mockUrl.updatedAt,
+          },
+        ],
+      });
     });
 
-    it('Deve retornar um array vazio se o usuário não tiver URLs', async () => {
-      userRepository.createQueryBuilder.mockReturnValue(
-        mockRepositoryQueryBuilder(mockUserNoUrl) as SelectQueryBuilder<User>,
-      );
+    it('Deve retornar um array vazio para data se o usuário não tiver URLs nesta página', async () => {
+      const page = 1;
+      const limit = 10;
+      const totalEntries = 0;
 
-      const result = await service.listUrls('user-id');
+      urlRepository.createQueryBuilder.mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getManyAndCount: jest.fn().mockResolvedValue([[], totalEntries]),
+      } as unknown as SelectQueryBuilder<Url>);
 
-      expect(userRepository.createQueryBuilder).toHaveBeenCalledWith('user');
-      expect(result).toEqual([]);
-    });
+      const result: ListUrlDto = await service.listUrls('user-id', page, limit);
 
-    it('Deve lançar NotFoundException se o usuário não for encontrado', async () => {
-      userRepository.createQueryBuilder.mockReturnValue(
-        mockRepositoryQueryBuilder(null) as unknown as SelectQueryBuilder<User>,
-      );
-
-      await expect(service.listUrls('inexistente')).rejects.toThrow(
-        new NotFoundException('Usuário não encontrado'),
-      );
+      expect(result).toEqual({
+        data: [],
+      });
     });
 
     it('Deve lançar InternalServerErrorException se a busca de URLs do usuário falhar', async () => {
-      userRepository.createQueryBuilder.mockReturnValue({
+      urlRepository.createQueryBuilder.mockReturnValue({
         where: jest.fn().mockReturnThis(),
         andWhere: jest.fn().mockReturnThis(),
-        leftJoinAndSelect: jest.fn().mockReturnThis(),
-        getOne: jest.fn().mockRejectedValue(new Error('DB connection error')),
-      } as unknown as SelectQueryBuilder<User>);
+        orderBy: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getManyAndCount: jest.fn().mockRejectedValue(new Error('DB connection error')),
+      } as unknown as SelectQueryBuilder<Url>);
 
       await expect(service.listUrls('user-id')).rejects.toThrow(
         new InternalServerErrorException('Erro ao buscar URLs do usuário'),

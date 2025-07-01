@@ -6,17 +6,15 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from '../../entities/user.entity';
 import { ListUrlDto } from '../../dtos/list-urls.dto';
 import { Url } from '@/core/url/entities/url.entity';
 import { UpdateUrlDto } from '../../dtos/update-url.dto';
 import { DeleteUrlDto } from '../../dtos/delete-url.dto';
+import { UrlDto } from '../../dtos/url.dto';
 
 @Injectable()
 export class UserService {
   public constructor(
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
     @InjectRepository(Url)
     private readonly urlRepository: Repository<Url>,
     private readonly logger: Logger,
@@ -24,34 +22,34 @@ export class UserService {
 
   private readonly DEFAULT_BASE_URL = 'http://localhost';
 
-  public async listUrls(userId: string): Promise<ListUrlDto[]> {
-    this.logger.log('Iniciando listagem de URLs');
+  public async listUrls(userId: string, page: number = 1, limit: number = 10): Promise<ListUrlDto> {
+    this.logger.log('Iniciando listagem de URLs', { limit, page });
 
-    const user = await this.userRepository
-      .createQueryBuilder('user')
-      .leftJoinAndSelect('user.urls', 'url', 'url.deletedAt IS NULL')
-      .where('user.id = :userId', { userId })
-      .getOne()
+    const offset = (page - 1) * limit;
+
+    const [urls, totalEntries] = await this.urlRepository
+      .createQueryBuilder('url')
+      .where('url.userId = :userId', { userId })
+      .andWhere('url.deletedAt IS NULL')
+      .orderBy('url.createdAt', 'DESC')
+      .skip(offset)
+      .take(limit)
+      .getManyAndCount()
       .catch((error) => {
         this.logger.error('Erro ao buscar URLs do usuário', error);
         throw new InternalServerErrorException('Erro ao buscar URLs do usuário');
       });
 
-    if (!user) {
-      this.logger.warn('Usuário não encontrado', userId);
+    if (!urls.length) {
+      this.logger.log('Usuário não possui URLs nesta página');
 
-      throw new NotFoundException('Usuário não encontrado');
-    }
-
-    if (!user.urls.length) {
-      this.logger.log('Usuário não possui URLs');
-
-      return [];
+      return {
+        data: [],
+      };
     }
 
     const baseUrl = process.env.BASE_URL ?? `${this.DEFAULT_BASE_URL}:${process.env.PORT ?? 3000}`;
-
-    return user.urls.map((url) => ({
+    const data: UrlDto[] = urls.map((url) => ({
       id: url.id,
       shortCode: url.shortCode,
       shortUrl: `${baseUrl}/${url.shortCode}`,
@@ -60,9 +58,16 @@ export class UserService {
       createdAt: url.createdAt,
       updatedAt: url.updatedAt,
     }));
+
+    return {
+      totalEntries,
+      page,
+      lastPage: Math.ceil(totalEntries / limit),
+      data,
+    };
   }
 
-  public async getUrlByShortCode(userId: string, shortCode: string): Promise<ListUrlDto> {
+  public async getUrlByShortCode(userId: string, shortCode: string): Promise<UrlDto> {
     this.logger.log('Iniciando busca de URL pelo shortCode');
 
     const url = await this.urlRepository
@@ -96,7 +101,7 @@ export class UserService {
     };
   }
 
-  public async updateOneUrl(userId: string, body: UpdateUrlDto): Promise<ListUrlDto> {
+  public async updateOneUrl(userId: string, body: UpdateUrlDto): Promise<UrlDto> {
     this.logger.log('Iniciando atualização de URL');
 
     const { newUrl, shortCode } = body;
@@ -145,7 +150,7 @@ export class UserService {
     }
   }
 
-  public async deleteOneUrl(userId: string, body: DeleteUrlDto): Promise<ListUrlDto> {
+  public async deleteOneUrl(userId: string, body: DeleteUrlDto): Promise<UrlDto> {
     this.logger.log('Iniciando exclusão de URL');
 
     const { shortCode } = body;
