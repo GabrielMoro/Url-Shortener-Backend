@@ -1,7 +1,7 @@
 import { AuthGuard } from '@/infra/guard/authorization.guard';
 import { Body, Controller, Delete, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
 import { UserService } from './services/user/user.service';
-import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { GetUser } from '@/common/decorators/get-user.decorator';
 import { User } from './entities/user.entity';
 import { ListUrlDto } from './dtos/list-urls.dto';
@@ -18,22 +18,18 @@ export class UserController {
   @ApiOperation({
     summary: 'Listar URLs encurtadas',
     description: 'Retorna todas as URLs encurtadas pelo usuário autenticado.',
-    parameters: [
-      {
-        name: 'page',
-        in: 'query',
-        required: false,
-        description: 'Número da página para paginação',
-        schema: { type: 'integer', default: 1 },
-      },
-      {
-        name: 'limit',
-        in: 'query',
-        required: false,
-        description: 'Quantidade de itens por página',
-        schema: { type: 'integer', default: 10 },
-      },
-    ],
+  })
+  @ApiQuery({
+    name: 'page',
+    description: 'Número da página para paginação',
+    required: false,
+    schema: { type: 'integer', default: 1 },
+  })
+  @ApiQuery({
+    name: 'limit',
+    description: 'Quantidade de itens por página',
+    required: false,
+    schema: { type: 'integer', default: 10 },
   })
   @ApiResponse({
     status: 200,
@@ -55,7 +51,9 @@ export class UserController {
   })
   @ApiParam({
     name: 'shortCode',
-    description: 'Código único da URL encurtada a ser atualizada',
+    description: 'Código único da URL encurtada a ser retornada',
+    required: true,
+    type: String,
   })
   @ApiResponse({
     status: 200,
@@ -74,6 +72,10 @@ export class UserController {
   @ApiOperation({
     summary: 'Atualizar o destino de uma URL encurtada',
   })
+  @ApiBody({
+    description: 'Dados da URL a ser atualizada',
+    type: UpdateUrlDto,
+  })
   @ApiResponse({
     status: 200,
     description: 'URL atualizada com sucesso.',
@@ -89,6 +91,10 @@ export class UserController {
   }
 
   @ApiOperation({ summary: 'Deleta uma URL do usuário pelo shortCode' })
+  @ApiBody({
+    description: 'Dados da URL a ser deletada',
+    type: DeleteUrlDto,
+  })
   @ApiResponse({ status: 200, description: 'URL deletada com sucesso', type: UrlDto })
   @ApiResponse({ status: 404, description: 'Usuário ou URL não encontrados' })
   @ApiResponse({ status: 400, description: 'Erro ao deletar a URL' })
